@@ -2,15 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-const axios = require('axios');  // For calling Google Maps API
+const axios = require('axios');  // For calling HERE API
 const mongoUri = process.env.MONGODB_URI;
 
-const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY;  // Google Maps API key
+const hereApiKey = 'iMr3ZlmiGokEaOlNNtIALL6qoq--OXqktFg0RpANP8A';  // HERE API key
 
 // Connect to MongoDB
 mongoose.connect(mongoUri)
-.then(() => console.log('Connected to MongoDB'))
-.catch(err => console.error('Could not connect to MongoDB:', err));
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => console.error('Could not connect to MongoDB:', err));
 
 // Define schema for geofence log
 const geofenceLogSchema = new mongoose.Schema({
@@ -38,24 +38,25 @@ app.use(bodyParser.json());
 // Temporary storage for latest entry events
 const latestEntries = {};
 
-// Helper function to calculate distance using Google Maps API
+// Helper function to calculate distance using HERE API
 async function calculateDistance(entryCoordinates, exitCoordinates) {
     const origin = `${entryCoordinates.latitude},${entryCoordinates.longitude}`;
     const destination = `${exitCoordinates.latitude},${exitCoordinates.longitude}`;
     
     try {
-        const response = await axios.get('https://maps.googleapis.com/maps/api/distancematrix/json', {
+        const response = await axios.get('https://router.hereapi.com/v8/routes', {
             params: {
-                origins: origin,
-                destinations: destination,
-                key: googleMapsApiKey
+                apiKey: hereApiKey,
+                origin,
+                destination,
+                return: 'summary'
             }
         });
-        
-        const distance = response.data.rows[0].elements[0].distance.value;  // distance in meters
+
+        const distance = response.data.routes[0].sections[0].summary.length;  // distance in meters
         return distance;
     } catch (error) {
-        console.error('Error fetching distance from Google Maps API:', error);
+        console.error('Error fetching distance from HERE API:', error);
         return null;  // Return null if error occurs
     }
 }
@@ -84,7 +85,7 @@ app.post('/geofence', async (req, res) => {
                 return res.status(400).json({ message: 'No entry event found for this device' });
             }
 
-            // Calculate distance between entry and exit locations using Google Maps API
+            // Calculate distance between entry and exit locations using HERE API
             const distance = await calculateDistance(entryData, { latitude, longitude });
 
             if (distance === null) {
